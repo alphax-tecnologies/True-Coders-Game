@@ -5,12 +5,13 @@ IF DEFENSE - Tela de Título
 Tela de título estilo "Five Nights at Freddy's 3": menu lateral com
 JOGAR / AJUDA / OPÇÕES, navegação por setas + Enter, painéis que
 deslizam suavemente para AJUDA e OPÇÕES, e fade-to-black ao iniciar
-o jogo (que encerra o programa, já que aqui é só a tela de título).
+o jogo (que agora chama o conteúdo de main.py em vez de apenas encerrar).
 
 Requisitos: pip install pygame
 
 Estrutura de pastas esperada:
     title_screen.py
+    main.py                (arquivo do jogo em si, chamado ao clicar em JOGAR)
     assets/
         logo.png            (logo "IF DEFENSE")
         btn_jogar.png        (botão "JOGAR" já pronto, estilo pixel art)
@@ -30,6 +31,7 @@ import sys
 import os
 import math
 import random
+import runpy
 import pygame
 
 # =========================================================================
@@ -38,6 +40,7 @@ import pygame
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 ASSETS_DIR = os.path.join(BASE_DIR, "assets")
+MAIN_PY_PATH = os.path.join(BASE_DIR, "main.py")
 
 WIDTH, HEIGHT = 1280, 720
 FPS = 60
@@ -715,6 +718,34 @@ else:
 
 
 # =========================================================================
+#  CHAMADA DO JOGO (main.py) AO CLICAR EM JOGAR
+# =========================================================================
+
+
+def launch_main_game():
+    """Executa todo o conteúdo de main.py quando o jogador clica em JOGAR.
+
+    Usa runpy.run_path, que roda o arquivo main.py como se fosse o
+    script principal (__name__ == "__main__"), no mesmo processo -
+    então tudo que main.py fizer (abrir sua própria janela pygame,
+    rodar seu próprio loop, etc.) é executado normalmente aqui.
+
+    Se main.py não existir na mesma pasta, o erro é reportado no
+    console em vez de travar a tela de título silenciosamente.
+    """
+    if not os.path.isfile(MAIN_PY_PATH):
+        print(f"[IF DEFENSE] Aviso: não encontrei '{MAIN_PY_PATH}'. "
+              f"Coloque o arquivo main.py na mesma pasta de title_screen.py.")
+        return
+    try:
+        runpy.run_path(MAIN_PY_PATH, run_name="__main__")
+    except SystemExit:
+        # main.py pode chamar sys.exit() ao terminar (comum em jogos
+        # pygame) - isso não deve derrubar a tela de título/processo.
+        pass
+
+
+# =========================================================================
 #  LOOP PRINCIPAL
 # =========================================================================
 
@@ -781,9 +812,11 @@ def main():
             if MIXER_OK:
                 pygame.mixer.music.set_volume(max(0.0, music_volume * (1 - fade_alpha / 255)))
             if fade_alpha >= 255:
-                # tela totalmente escura: aqui é onde o jogo de verdade
-                # começaria. Como isso é só a tela de título, o código
-                # encerra o programa.
+                # tela totalmente escura: agora é aqui que o jogo de
+                # verdade começa de fato - chamamos todo o conteúdo de
+                # main.py. Quando main.py terminar (ou fechar sua janela),
+                # o programa é encerrado normalmente.
+                launch_main_game()
                 running = False
 
         # ---- desenhar ----
