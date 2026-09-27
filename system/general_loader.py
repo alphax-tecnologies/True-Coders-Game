@@ -177,7 +177,7 @@ def _call_hook_safely(module, folder_name, hook_name, *args):
 # =========================================================================
 
 
-def run_game():
+def run_game(game_mode):
     """Ponto de entrada do jogo, chamado por main.py.
 
     1. Descobre e importa todos os loader.py dentro das subpastas de
@@ -188,6 +188,8 @@ def run_game():
        cada módulo, na ordem em que foram carregados;
     5. Ao final, roda teardown() de cada módulo, na ordem inversa.
     """
+    print(f"FOI: {game_mode}")
+    sys.exit()
     loaded_modules = load_all_modules()
 
     if not loaded_modules:
