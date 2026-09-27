@@ -1,0 +1,7 @@
+{
+    "configs":[{
+        "zumbi_velocity":2,
+        "money":300,
+        "ondas":8
+    }]
+}
