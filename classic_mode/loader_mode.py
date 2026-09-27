@@ -40,6 +40,7 @@ ATTACKS_DIR = os.path.join(SYSTEM_DIR, "attacks")
 ASSETS_DIR = os.path.join(PROJECT_DIR, "assets")
 
 BACKGROUND_PATH = os.path.join(ASSETS_DIR, "backgroundgame.png")
+MUSIC_PATH = os.path.join(ASSETS_DIR, "TIMER1.mp3")
 
 FPS = 60
 
@@ -56,7 +57,7 @@ WINDOW_SIZE = (1280, 720)
 
 
 # =========================================================================
-#  CARREGAMENTO DO FUNDO
+#  CARREGAMENTO DO FUNDO E ÁUDIO
 # =========================================================================
 
 
@@ -74,6 +75,19 @@ def _load_background(fallback_size):
     surface = pygame.Surface(fallback_size)
     surface.fill((40, 110, 40))
     return surface
+
+
+def _play_background_music(music_path):
+    """Para qualquer áudio anterior e inicia o novo áudio em loop."""
+    if os.path.isfile(music_path):
+        try:
+            pygame.mixer.music.stop()
+            pygame.mixer.music.load(music_path)
+            pygame.mixer.music.play(loops=-1)
+        except Exception as e:
+            print(f"[IF DEFENSE] Erro ao carregar a música '{music_path}': {e}")
+    else:
+        print(f"[IF DEFENSE] Aviso: Música '{music_path}' não encontrada.")
 
 
 # =========================================================================
@@ -140,6 +154,10 @@ def _rescale_event_pos(event, scale_x, scale_y):
 
 def run():
     pygame.init()
+    if not pygame.mixer.get_init():
+        pygame.mixer.init()
+
+    _play_background_music(MUSIC_PATH)
 
     screen = pygame.display.set_mode(WINDOW_SIZE)
     pygame.display.set_caption("IF DEFENSE - Modo Clássico")
