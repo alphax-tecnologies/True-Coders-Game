@@ -843,6 +843,7 @@ def main():
             fade_surf.set_alpha(int(fade_alpha))
             screen.blit(fade_surf, (0, 0))
 
+
         pygame.display.flip()
 
     pygame.quit()

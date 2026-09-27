@@ -72,6 +72,7 @@ não geram erro.
 import os
 import sys
 import importlib
+import importlib.util
 import traceback
 
 import pygame
@@ -82,10 +83,29 @@ import pygame
 # =========================================================================
 
 SYSTEM_DIR = os.path.dirname(os.path.abspath(__file__))
+PROJECT_DIR = os.path.dirname(SYSTEM_DIR)
 LOADER_FILENAME = "loader.py"
 
 WIDTH, HEIGHT = 1280, 720
 FPS = 60
+
+# ---- mapeamento de game_mode -> pasta do modo -------------------------
+# Cada modo é uma pasta na raiz do projeto (irmã de system/) contendo um
+# arquivo loader_mode.py, que é autocontido: ele estrutura e roda o
+# jogo inteiro daquele modo por conta própria (não usa o contrato de
+# hooks setup/update/draw do general_loader). O general_loader aqui só
+# tem o papel de descobrir o arquivo certo e chamar sua função de
+# entrada.
+GAME_MODES = {
+    0: "classic_mode",
+    # 1: "endless_mode",   # futuros modos entram aqui, mesma convenção
+}
+
+MODE_LOADER_FILENAME = "loader_mode.py"
+
+# Nomes de função de entrada reconhecidos em loader_mode.py, tentados
+# nesta ordem. A primeira que existir no módulo é chamada.
+MODE_ENTRY_POINT_NAMES = ("run", "main", "run_game", "start")
 
 # Nomes de função reconhecidos em cada loader.py (nesta ordem de
 # relevância dentro do ciclo de vida do jogo).
@@ -173,13 +193,97 @@ def _call_hook_safely(module, folder_name, hook_name, *args):
 
 
 # =========================================================================
-#  MONTAGEM E EXECUÇÃO DO JOGO
+#  ROTEAMENTO POR MODO DE JOGO (loader_mode.py de cada modo)
+# =========================================================================
+
+
+def _import_mode_loader(mode_folder_name):
+    """Importa system/../<mode_folder_name>/loader_mode.py (a pasta do
+    modo fica na raiz do projeto, irmã de system/) e devolve o módulo
+    importado, ou None se o arquivo não existir ou falhar ao importar."""
+    mode_dir = os.path.join(PROJECT_DIR, mode_folder_name)
+    loader_path = os.path.join(mode_dir, MODE_LOADER_FILENAME)
+
+    if not os.path.isfile(loader_path):
+        print(
+            f"[IF DEFENSE] Modo '{mode_folder_name}' não encontrado: "
+            f"'{loader_path}' não existe."
+        )
+        return None
+
+    module_name = f"game_modes.{mode_folder_name}"
+    try:
+        spec = importlib.util.spec_from_file_location(module_name, loader_path)
+        module = importlib.util.module_from_spec(spec)
+        sys.modules[module_name] = module
+        spec.loader.exec_module(module)
+        return module
+    except Exception:
+        print(
+            f"[IF DEFENSE] Erro ao carregar '{loader_path}':\n"
+            f"{traceback.format_exc()}"
+        )
+        return None
+
+
+def _call_mode_entry_point(module, mode_folder_name):
+    """Procura, em ordem, uma função de entrada reconhecida dentro do
+    módulo do modo (run/main/run_game/start) e a chama. loader_mode.py
+    é autocontido: ele cuida de inicializar o pygame, abrir a janela e
+    rodar seu próprio loop, então nenhum argumento é passado além do
+    necessário."""
+    for entry_name in MODE_ENTRY_POINT_NAMES:
+        entry_point = getattr(module, entry_name, None)
+        if callable(entry_point):
+            entry_point()
+            return True
+
+    print(
+        f"[IF DEFENSE] '{mode_folder_name}/{MODE_LOADER_FILENAME}' foi "
+        f"carregado, mas não expõe nenhuma função de entrada reconhecida "
+        f"({', '.join(MODE_ENTRY_POINT_NAMES)}). Nada para rodar."
+    )
+    return False
+
+
+def run_mode(game_mode):
+    """Resolve o game_mode recebido para uma pasta de modo e delega a
+    execução inteira do jogo para o loader_mode.py dessa pasta.
+
+    Devolve True se um modo foi encontrado e executado (mesmo que o
+    próprio modo termine em erro internamente), False se o game_mode
+    não corresponde a nenhum modo conhecido ou o arquivo não existe."""
+    mode_folder_name = GAME_MODES.get(game_mode)
+
+    if mode_folder_name is None:
+        print(
+            f"[IF DEFENSE] Aviso: game_mode={game_mode!r} não é "
+            f"reconhecido. Modos disponíveis: {GAME_MODES}."
+        )
+        return False
+
+    module = _import_mode_loader(mode_folder_name)
+    if module is None:
+        return False
+
+    print(f"[IF DEFENSE] Modo '{mode_folder_name}' carregado, iniciando...")
+    return _call_mode_entry_point(module, mode_folder_name)
+
+
+# =========================================================================
+#  MONTAGEM E EXECUÇÃO DO JOGO (fallback: sistema genérico de hooks)
 # =========================================================================
 
 
 def run_game(game_mode):
     """Ponto de entrada do jogo, chamado por main.py.
 
+    Se game_mode corresponder a um modo conhecido em GAME_MODES (ex.:
+    0 -> classic_mode), delega TODA a execução para o loader_mode.py
+    daquele modo, que é autocontido e roda seu próprio jogo.
+
+    Caso contrário (modo desconhecido, ou sem game_mode nenhum), cai
+    no comportamento genérico legado deste arquivo:
     1. Descobre e importa todos os loader.py dentro das subpastas de
        system/;
     2. Inicializa o pygame e cria a janela/tela do jogo;
@@ -188,8 +292,9 @@ def run_game(game_mode):
        cada módulo, na ordem em que foram carregados;
     5. Ao final, roda teardown() de cada módulo, na ordem inversa.
     """
-    print(f"FOI: {game_mode}")
-    sys.exit()
+    if run_mode(game_mode):
+        return
+
     loaded_modules = load_all_modules()
 
     if not loaded_modules:
