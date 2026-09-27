@@ -34,6 +34,9 @@ Estrutura de pastas esperada:
         endlessmode.png            (botão "ENDLESS", canto direito)
         backgroundmode.png          (fundo da tela de seleção)
         textmode.png                 ("ESCOLHA O MODO DE JOGO")
+        sfx_hover.wav                (opcional - som ao trocar o modo selecionado)
+        sfx_confirm.wav               (opcional - som ao confirmar o modo)
+        musicmode.mp3                  (opcional - música de fundo desta tela)
 """
 
 import os
@@ -87,6 +90,33 @@ def _load_image(filename):
     except pygame.error as exc:
         print(f"[IF DEFENSE] Erro ao carregar '{path}': {exc}")
         return None
+
+
+try:
+    pygame.mixer.init()
+    MIXER_OK = True
+except pygame.error:
+    MIXER_OK = False
+
+
+def _load_sound(filename):
+    """Carrega um efeito sonoro de assets/. Devolve None se não existir
+    ou se o mixer não estiver disponível, pra não travar o jogo."""
+    if not MIXER_OK:
+        return None
+    path = os.path.join(ASSETS_DIR, filename)
+    if os.path.isfile(path):
+        try:
+            return pygame.mixer.Sound(path)
+        except pygame.error:
+            return None
+    return None
+
+
+def _play_sfx(sound, volume=0.7):
+    if sound is not None:
+        sound.set_volume(volume)
+        sound.play()
 
 
 def _lerp(a, b, t):
@@ -260,6 +290,20 @@ def choose_game_mode():
     classico_raw = _load_image("classicmode.png")
     endless_raw = _load_image("endlessmode.png")
 
+    # ---- sons (hover, confirm) e música de fundo desta tela ----
+    sfx_hover = _load_sound("sfx_hover.wav")
+    sfx_confirm = _load_sound("sfx_confirm.wav")
+
+    if MIXER_OK:
+        music_path = os.path.join(ASSETS_DIR, "music.mp3")
+        if os.path.isfile(music_path):
+            try:
+                pygame.mixer.music.load(music_path)
+                pygame.mixer.music.set_volume(0.5)
+                pygame.mixer.music.play(-1)
+            except pygame.error:
+                pass
+
     if background_raw is not None:
         background_raw = background_raw.convert()
         background_cover = _make_cover_surface(background_raw, (WIDTH, HEIGHT))
@@ -321,10 +365,15 @@ def choose_game_mode():
 
             elif event.type == pygame.KEYDOWN:
                 if event.key in (pygame.K_LEFT, pygame.K_a):
+                    if selected_index != 0:
+                        _play_sfx(sfx_hover)
                     selected_index = 0
                 elif event.key in (pygame.K_RIGHT, pygame.K_d):
+                    if selected_index != 1:
+                        _play_sfx(sfx_hover)
                     selected_index = 1
                 elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER, pygame.K_SPACE):
+                    _play_sfx(sfx_confirm)
                     chosen_mode = buttons[selected_index].mode_value
                     running = False
                 elif event.key == pygame.K_ESCAPE:
@@ -332,12 +381,14 @@ def choose_game_mode():
 
             elif event.type == pygame.MOUSEMOTION:
                 for i, btn in enumerate(buttons):
-                    if btn.contains_point(event.pos):
+                    if btn.contains_point(event.pos) and selected_index != i:
+                        _play_sfx(sfx_hover)
                         selected_index = i
 
             elif event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
                 for btn in buttons:
                     if btn.contains_point(event.pos):
+                        _play_sfx(sfx_confirm)
                         chosen_mode = btn.mode_value
                         running = False
 
