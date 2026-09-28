@@ -2,7 +2,7 @@
     "configs":[{
         "zumbi_velocity":0.3,
         "money":500,
-        "ondas":1,
+        "ondas":7,
         "zumbi_per_onda":1,
         "zumbi_life":500,
         "intervalo_ondas":10

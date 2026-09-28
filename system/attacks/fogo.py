@@ -12,8 +12,8 @@ pronta.
 
 ATTACK = {
     "name": "Bola de Fogo",
-    "cost": 0,
-    "damage": 100,
+    "cost": 40,
+    "damage": 25,
     "source":"assets/fogo.png",
     "sprite_frame_width": 64,
     "sprite_frame_height": 64,
