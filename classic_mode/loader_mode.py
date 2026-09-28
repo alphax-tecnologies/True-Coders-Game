@@ -18,8 +18,8 @@ O QUE ESTE ARQUIVO FAZ
      - canto superior ESQUERDO: total de moedas do jogador;
      - canto superior DIREITO: ondas geradas / total de ondas (0/N).
 4. Fases (classic_mode/fases/fase1.json, fase2.json, ...): cada fase
-   define moedas iniciais, total de zumbis, velocidade dos zumbis (em
-   blocos por segundo) e total de ondas. Quando as ondas acabam e não
+   define moedas iniciais, velocidade dos zumbis (em blocos por
+   segundo) e total de ondas. Quando as ondas acabam e não
    sobra nenhum zumbi vivo, o jogo carrega a fase seguinte. Sem mais
    fases, mostra a tela de vitória.
 5. Zumbis: todos os tipos definidos em system/zumbi/loader_zumbis.py
@@ -32,16 +32,19 @@ O QUE ESTE ARQUIVO FAZ
 FORMATO DE classic_mode/fases/faseN.json
 -------------------------------------------
     {
-      "moedas_iniciais": 200,
-      "total_zumbis": 12,
-      "velocidade_zumbis": 0.25,
-      "total_ondas": 4,
-      "intervalo_ondas": 12
+        "configs": [{
+            "zumbi_velocity": 1,
+            "money": 200,
+            "ondas": 6,
+            "zumbi_per_onda": 5
+        }]
     }
-"intervalo_ondas" (segundos entre ondas) é opcional. Os zumbis do
-total são divididos igualmente entre as ondas (a sobra vai pras
-primeiras). Os nomes das chaves aceitam também as variações listadas
-em PHASE_KEYS.
+"zumbi_velocity" = blocos por segundo; "money" = moedas iniciais;
+"ondas" = total de ondas; "zumbi_per_onda" = zumbis gerados em cada
+onda (sem essa chave, cada onda gera 1 zumbi). Chaves opcionais:
+"total_zumbis" (usado só se não houver zumbi_per_onda; é dividido
+entre as ondas) e "intervalo_ondas" (segundos entre ondas, padrão
+DEFAULT_WAVE_INTERVAL). Outros nomes de chave aceitos: PHASE_KEYS.
 
 CONTRATO COM system/zumbi/loader_zumbis.py
 ---------------------------------------------
@@ -120,12 +123,14 @@ DEFAULT_PHASE = {
 }
 
 PHASE_KEYS = {
-    "coins": ("moedas_iniciais", "moedas", "coins", "start_coins"),
+    "coins": ("money", "moedas_iniciais", "moedas", "coins"),
     "total_zombies": ("total_zumbis", "zumbis", "total_zombies", "zombies"),
-    "speed": ("velocidade_zumbis", "velocidade", "speed", "zombie_speed"),
-    "total_waves": ("total_ondas", "ondas", "total_waves", "waves"),
+    "speed": ("zumbi_velocity", "velocidade_zumbis", "velocidade", "speed"),
+    "total_waves": ("ondas", "total_ondas", "total_waves", "waves"),
     "wave_interval": ("intervalo_ondas", "intervalo", "wave_interval"),
 }
+
+WAVE_SIZE_KEYS = ("zumbi_per_onda", "zumbis_por_onda", "zombies_per_wave")
 
 ZOMBIE_LOADER_FUNCTIONS = (
     "load_available_zombies",
@@ -252,9 +257,22 @@ def load_phase(number):
         with open(path, "r", encoding="utf-8") as file:
             raw = json.load(file)
 
+        # formato: {"configs": [ {...} ]} - usa o 1º item da lista
+        if isinstance(raw, dict) and isinstance(raw.get("configs"), list):
+            raw = raw["configs"][0]
+
         phase = dict(DEFAULT_PHASE)
         for key, aliases in PHASE_KEYS.items():
             phase[key] = _first_key(raw, aliases, phase[key])
+
+        # zumbis por onda: "zumbi_per_onda" manda; senão vale
+        # "total_zumbis" (dividido entre as ondas); senão 1 por onda
+        total_waves = max(1, int(phase["total_waves"]))
+        per_wave = _first_key(raw, WAVE_SIZE_KEYS)
+        if per_wave is not None:
+            phase["total_zombies"] = max(0, int(per_wave)) * total_waves
+        elif _first_key(raw, PHASE_KEYS["total_zombies"]) is None:
+            phase["total_zombies"] = total_waves
 
         phase["coins"] = max(0, int(phase["coins"]))
         phase["total_zombies"] = max(0, int(phase["total_zombies"]))

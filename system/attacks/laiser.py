@@ -23,7 +23,7 @@ bater exatamente com o arquivo (célula = tamanho_da_imagem / colunas).
 
 TURRET = {
     "name": "Laiser",
-    "cost": 100,
+    "cost": 10,
     "damage": 15,
     "fire_interval": 3.0,
     "max_hp": 150,
