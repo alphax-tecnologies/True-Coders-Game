@@ -1,8 +1,9 @@
 {
     "configs":[{
-        "zumbi_velocity":0.5,
+        "zumbi_velocity":1,
         "money":200,
         "ondas":1,
+        "zumbi_life":50,
         "zumbi_per_onda":7,
         "intervalo_ondas":10
     }]
