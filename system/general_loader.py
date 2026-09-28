@@ -98,7 +98,8 @@ FPS = 60
 # entrada.
 GAME_MODES = {
     0: "classic_mode",
-    # 1: "endless_mode",   # futuros modos entram aqui, mesma convenção
+    1: "endless_mode",
+    # futuros modos entram aqui, mesma convenção
 }
 
 MODE_LOADER_FILENAME = "loader_mode.py"
