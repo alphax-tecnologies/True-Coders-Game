@@ -13,7 +13,7 @@ pronta.
 ATTACK = {
     "name": "Bola de Fogo",
     "cost": 0,
-    "damage": 1000,
+    "damage": 100,
     "sprite_frame_width": 64,
     "sprite_frame_height": 64,
     "sprite_frame_count": 4,

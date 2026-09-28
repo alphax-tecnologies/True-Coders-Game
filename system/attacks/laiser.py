@@ -27,7 +27,7 @@ TURRET = {
     "damage": 15,
     "fire_interval": 3.0,
     "max_hp": 150,
-
+    "source":"assets/laiser.png",
     "sprite_grid_cols": 4,
     "sprite_grid_rows": 4,
     "sprite_cell_width": 384,

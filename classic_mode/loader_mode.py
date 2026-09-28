@@ -42,8 +42,9 @@ FORMATO DE classic_mode/fases/faseN.json
 "zumbi_velocity" = blocos por segundo; "money" = moedas iniciais;
 "ondas" = total de ondas; "zumbi_per_onda" = zumbis gerados em cada
 onda (sem essa chave, cada onda gera 1 zumbi). Chaves opcionais:
-"total_zumbis" (usado só se não houver zumbi_per_onda; é dividido
-entre as ondas) e "intervalo_ondas" (segundos entre ondas, padrão
+"zumbi_life" (vida de todos os zumbis da fase; sem ela, cada zumbi usa
+a vida do próprio tipo), "total_zumbis" (usado só se não houver
+zumbi_per_onda; é dividido entre as ondas) e "intervalo_ondas" (segundos entre ondas, padrão
 DEFAULT_WAVE_INTERVAL). Outros nomes de chave aceitos: PHASE_KEYS.
 
 CONTRATO COM system/zumbi/loader_zumbis.py
@@ -120,6 +121,7 @@ DEFAULT_PHASE = {
     "speed": 0.15,
     "total_waves": 3,
     "wave_interval": DEFAULT_WAVE_INTERVAL,
+    "zombie_life": None,  # None = cada zumbi usa a vida do próprio tipo
 }
 
 PHASE_KEYS = {
@@ -131,6 +133,7 @@ PHASE_KEYS = {
 }
 
 WAVE_SIZE_KEYS = ("zumbi_per_onda", "zumbis_por_onda", "zombies_per_wave")
+LIFE_KEYS = ("zumbi_life", "zombie_life", "zumbi_vida")
 
 ZOMBIE_LOADER_FUNCTIONS = (
     "load_available_zombies",
@@ -279,6 +282,10 @@ def load_phase(number):
         phase["total_waves"] = max(1, int(phase["total_waves"]))
         phase["speed"] = max(0.0, float(phase["speed"]))
         phase["wave_interval"] = max(0.5, float(phase["wave_interval"]))
+
+        # "zumbi_life" (opcional): substitui a vida de TODOS os zumbis da fase
+        life = _first_key(raw, LIFE_KEYS)
+        phase["zombie_life"] = float(life) if life is not None and float(life) > 0 else None
     except Exception:
         print(f"[IF DEFENSE] Erro ao ler '{path}':\n{traceback.format_exc()}")
         return None
@@ -449,11 +456,30 @@ def _import_zombie_templates():
             sys.modules["domain"] = attacks_domain
 
 
-def _spawn_zombie(template, row, x, y, speed_px):
+LIFE_ATTRIBUTES = ("hp", "max_hp", "life", "vida", "health", "max_health")
+
+
+def _apply_life(zombie, life):
+    """Define a vida do zumbi (e a vida máxima, usada na barra de vida).
+    Mexe nos atributos de vida que o zumbi já tem; se não tiver nenhum,
+    cria hp/max_hp."""
+    present = [name for name in LIFE_ATTRIBUTES if hasattr(zombie, name)]
+    for name in present or ("hp", "max_hp"):
+        try:
+            setattr(zombie, name, life)
+        except AttributeError:
+            pass
+
+
+def _spawn_zombie(template, row, x, y, speed_px, life=None):
     """Cria uma instância de zumbi a partir de um tipo (ver contrato no
-    topo do arquivo). Devolve None se não conseguir."""
+    topo do arquivo). `life`, se informado (chave "zumbi_life" da
+    fase), substitui a vida do zumbi. Devolve None se não conseguir."""
     if isinstance(template, dict):
-        return BuiltinZombie(template, row, x, y, speed_px)
+        zombie = BuiltinZombie(template, row, x, y, speed_px)
+        if life is not None:
+            _apply_life(zombie, life)
+        return zombie
 
     factory = getattr(template, "spawn", None)
     if not callable(factory):
@@ -486,6 +512,8 @@ def _spawn_zombie(template, row, x, y, speed_px):
             pass
     if not hasattr(zombie, "alive"):
         zombie.alive = True
+    if life is not None:
+        _apply_life(zombie, life)
     return zombie
 
 
@@ -608,6 +636,7 @@ class PhaseController:
                 board.spawn_x(row) + position_in_queue * col_w * 0.9,
                 board.row_center_y(row),
                 self.phase["speed"] * col_w,  # blocos/s -> pixels/s
+                self.phase.get("zombie_life"),
             )
             if zombie is not None:
                 self.zombies.append(zombie)
