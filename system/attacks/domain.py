@@ -19,17 +19,20 @@ variável de módulo chamada ATTACK, um dicionário com este formato:
         "cost": 50,                   # custo em moedas pra usar
         "damage": 20,                 # dano causado ao zumbi mais
                                        # próximo do ataque, por uso
+        "source": "assets/fogo.png",  # caminho da imagem do spritesheet
         "sprite_frame_width": 64,     # largura de cada frame (px)
         "sprite_frame_height": 64,    # altura de cada frame (px)
         "sprite_frame_count": 4,      # quantos frames tem o spritesheet
         "sprite_fps": 8,              # velocidade da animação
     }
 
-O spritesheet correspondente deve estar em assets/<nome_do_arquivo>.png
-(mesmo nome do arquivo .py, sem extensão). Ex: system/atacks/fogo.py
-usa assets/fogo.png. Se o arquivo de imagem não existir, um placeholder
-colorido é gerado automaticamente, então o jogo nunca quebra por falta
-de asset.
+A chave "source" diz onde está a imagem do spritesheet. É um caminho
+relativo à RAIZ do projeto (a pasta que contém system/ e assets/), como
+"assets/fogo.png" ou "assets/ataques/fogo.png", ou um caminho absoluto.
+Pode usar "/" ou "\\", em qualquer sistema. Sem "source", o loader usa
+o comportamento antigo: assets/<nome_do_arquivo>.png. Se a imagem não
+existir, um placeholder colorido é gerado e o console avisa QUAL caminho
+foi tentado, então o jogo nunca quebra por falta de asset.
 
 O spritesheet é usado em dois lugares:
     - Ícone do slot: primeiro frame, redimensionado pro tamanho do slot.
@@ -50,16 +53,18 @@ até ser destruída (vida própria) ou o jogo acabar.
         "damage": 15,                 # dano por disparo
         "fire_interval": 3.0,         # segundos entre disparos
         "max_hp": 150,                # vida da torreta
+        "source": "assets/laiser.png",  # caminho da imagem do spritesheet
 
-        # spritesheet em grade: assets/<nome_do_arquivo>.png, dividido
+        # spritesheet em grade, lido de "source" (mesmas regras do
+        # ATTACK acima), dividido
         # em sprite_grid_cols colunas x sprite_grid_rows linhas, todas
         # as células do mesmo tamanho (sprite_cell_width x
         # sprite_cell_height). Cada "linha nomeada" abaixo é uma faixa
         # dentro dessa grade usada como uma animação específica.
         "sprite_grid_cols": 4,
         "sprite_grid_rows": 4,
-        "sprite_cell_width": 256,
-        "sprite_cell_height": 256,
+        "sprite_cell_width": 384,
+        "sprite_cell_height": 384,
 
         # cada entrada é (linha_inicial, linha_final) na grade,
         # 0-indexado, inclusive - todas as células dessas linhas,
@@ -86,9 +91,31 @@ import hashlib
 import pygame
 
 
-ASSETS_DIR = os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "assets"
-)
+# domain.py fica em <raiz>/system/attacks/, então a raiz do projeto está
+# TRÊS níveis acima do arquivo (attacks -> system -> raiz), e os
+# spritesheets ficam em <raiz>/assets/.
+PROJECT_DIR = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+ASSETS_DIR = os.path.join(PROJECT_DIR, "assets")
+
+
+def resolve_source(source, ability_id):
+    """Converte o valor da chave "source" de um ATTACK/TURRET no caminho
+    absoluto da imagem do spritesheet.
+
+    "source" é o caminho da imagem, e pode ser:
+        - relativo à raiz do projeto: "assets/laiser.png" (o mais comum);
+        - absoluto: "/home/user/jogo/assets/laiser.png".
+
+    Barras "/" e "\\" são aceitas nos dois sistemas. Se "source" não for
+    informado (None ou vazio), mantém o comportamento antigo:
+    assets/<nome_do_arquivo_do_ataque>.png."""
+    if not source:
+        return os.path.join(ASSETS_DIR, f"{ability_id}.png")
+
+    normalized = os.path.normpath(str(source).replace("\\", "/"))
+    if os.path.isabs(normalized):
+        return normalized
+    return os.path.join(PROJECT_DIR, normalized)
 
 
 # =========================================================================
@@ -135,16 +162,34 @@ def _build_placeholder_sheet(attack_id, frame_w, frame_h, frame_count):
     return sheet
 
 
-def load_spritesheet(attack_id, frame_w, frame_h, frame_count):
-    """Carrega assets/<attack_id>.png se existir; caso contrário devolve
-    um placeholder gerado. attack_id é o nome do arquivo .py do ataque,
-    sem extensão (ex: "fogo" para system/atacks/fogo.py)."""
-    path = os.path.join(ASSETS_DIR, f"{attack_id}.png")
-    if os.path.isfile(path):
-        try:
-            return pygame.image.load(path).convert_alpha()
-        except Exception:
-            pass
+def _load_image_or_none(path, ability_id):
+    """Carrega a imagem em `path`. Se o arquivo não existir ou não puder
+    ser lido, avisa no console (dizendo QUAL caminho foi tentado, pra
+    facilitar achar erro de digitação em "source") e devolve None."""
+    if not os.path.isfile(path):
+        print(
+            f"[IF DEFENSE] Aviso: imagem de '{ability_id}' não encontrada em "
+            f"'{path}'. Usando placeholder."
+        )
+        return None
+    try:
+        return pygame.image.load(path).convert_alpha()
+    except Exception as error:
+        print(
+            f"[IF DEFENSE] Aviso: não consegui ler a imagem de '{ability_id}' "
+            f"em '{path}' ({error}). Usando placeholder."
+        )
+        return None
+
+
+def load_spritesheet(attack_id, frame_w, frame_h, frame_count, source=None):
+    """Carrega o spritesheet horizontal do ataque a partir de `source`
+    (ver resolve_source); sem `source`, usa assets/<attack_id>.png. Se a
+    imagem não existir, devolve um placeholder gerado."""
+    path = resolve_source(source, attack_id)
+    sheet = _load_image_or_none(path, attack_id)
+    if sheet is not None:
+        return sheet
     return _build_placeholder_sheet(attack_id, frame_w, frame_h, frame_count)
 
 
@@ -227,16 +272,15 @@ def _build_placeholder_grid_sheet(turret_id, cell_w, cell_h, cols, rows):
     return sheet
 
 
-def load_grid_spritesheet(turret_id, cell_w, cell_h, cols, rows):
-    """Carrega assets/<turret_id>.png (spritesheet em grade) se
-    existir; caso contrário devolve um placeholder gerado com o
-    tamanho de grade esperado."""
-    path = os.path.join(ASSETS_DIR, f"{turret_id}.png")
-    if os.path.isfile(path):
-        try:
-            return pygame.image.load(path).convert_alpha()
-        except Exception:
-            pass
+def load_grid_spritesheet(turret_id, cell_w, cell_h, cols, rows, source=None):
+    """Carrega o spritesheet em grade da torreta a partir de `source`
+    (ver resolve_source); sem `source`, usa assets/<turret_id>.png. Se a
+    imagem não existir, devolve um placeholder com o tamanho de grade
+    esperado."""
+    path = resolve_source(source, turret_id)
+    sheet = _load_image_or_none(path, turret_id)
+    if sheet is not None:
+        return sheet
     return _build_placeholder_grid_sheet(turret_id, cell_w, cell_h, cols, rows)
 
 
@@ -296,7 +340,10 @@ class Attack:
         frame_count = max(1, int(data.get("sprite_frame_count", 1)))
         fps = int(data.get("sprite_fps", 8))
 
-        sheet = load_spritesheet(attack_id, frame_w, frame_h, frame_count)
+        self.source = data.get("source")
+        sheet = load_spritesheet(
+            attack_id, frame_w, frame_h, frame_count, source=self.source
+        )
         frames = slice_frames(sheet, frame_w, frame_h, frame_count)
 
         self.animation = SpriteAnimation(frames, fps)
@@ -343,7 +390,10 @@ class Turret:
         destroy_range = sprite_rows.get("destroy", idle_range)
         aftermath_range = sprite_rows.get("aftermath", destroy_range)
 
-        sheet = load_grid_spritesheet(turret_id, cell_w, cell_h, cols, rows)
+        self.source = data.get("source")
+        sheet = load_grid_spritesheet(
+            turret_id, cell_w, cell_h, cols, rows, source=self.source
+        )
 
         idle_frames = slice_grid_frames(sheet, cell_w, cell_h, cols, rows, idle_range)
         destroy_frames = slice_grid_frames(sheet, cell_w, cell_h, cols, rows, destroy_range)

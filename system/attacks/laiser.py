@@ -23,11 +23,14 @@ bater exatamente com o arquivo (célula = tamanho_da_imagem / colunas).
 
 TURRET = {
     "name": "Laiser",
-    "cost": 10,
+    "cost": 100,
     "damage": 15,
     "fire_interval": 3.0,
     "max_hp": 150,
-    "source":"assets/laiser.png",
+
+    # caminho da imagem do spritesheet, relativo à raiz do projeto
+    "source": "assets/laiser_parcial.png",
+
     "sprite_grid_cols": 4,
     "sprite_grid_rows": 4,
     "sprite_cell_width": 384,
